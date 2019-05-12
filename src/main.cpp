@@ -7,6 +7,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "helpers.h"
 #include "json.hpp"
+#include "spline.h"
 
 // for convenience
 using nlohmann::json;
@@ -97,15 +98,19 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
-          double dist_inc = 0.5;
+          double dist_inc = 0.3;
           for (int i = 0; i < 50; ++i) {
-            double next_s = car_x + (i + 1) * dist_inc;
+            double next_s = car_s + (i+1) * dist_inc;
             double next_d = 6;
-            auto xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x,
+            vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x,
                             map_waypoints_y);
             next_x_vals.push_back(xy[0]);
             next_y_vals.push_back(xy[1]);
+            std::cout << "next x " << xy[0] << " next_y " << xy[1] << std::endl;
+
+
           }
+          std::cout << "car_x " << car_x << " car_y " << car_y << std::endl;
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
