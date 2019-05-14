@@ -53,7 +53,7 @@ int main() {
 
   int lane = 1;
   // reference velocity
-  double ref_vel = 49.5;  // mph
+  double ref_vel = 0.0;  // mph
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel]
@@ -94,11 +94,43 @@ int main() {
           auto sensor_fusion = j[1]["sensor_fusion"];
 
           int prev_size = previous_path_x.size();
+          if (prev_size > 0) {
+            car_s = end_path_s;
+          }
 
-          /**
-           * TODO: define a path made up of (x,y) points that the car will visit
-           *   sequentially every .02 seconds
-           */
+          bool too_close = false;
+
+          // find ref_v to use
+          for (int i = 0; i < sensor_fusion.size(); i++) {
+            // car is in our lane
+            float d = sensor_fusion[i][6];
+            if (d < (2 + 4 * lane + 2) && d > (2 + 4 * lane - 2)) {
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double check_car_s = sensor_fusion[i][5];
+              double check_speed = sqrt(vx * vx + vy * vy);
+
+              // if using previous points, predict the check car poison
+              check_car_s += ((double)prev_size * 0.02 * check_speed);
+
+              // check_s value greater than our,and s gap < 30
+              if ((check_car_s > car_s) && (check_car_s - car_s) < 30) {
+                // slow down and try to change lane
+                // ref_vel = 29.5;
+                too_close = true;
+
+                if (lane > 0) {
+                  lane = 0;
+                }
+              }
+            }
+          }
+
+          if (too_close) {
+            ref_vel -= 0.224;  // 5m/s
+          } else if (ref_vel < 49.5) {
+            ref_vel += 0.224;
+          }
 
           vector<double> ptsx;
           vector<double> ptsy;
