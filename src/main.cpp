@@ -51,6 +51,9 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
+
+	// Vehicle my_car = Vehicle();
+
   int lane = 1;
   // reference velocity
   double ref_vel = 0.0;  // mph
@@ -98,38 +101,71 @@ int main() {
             car_s = end_path_s;
           }
 
-          bool too_close = false;
+          // Prediction : Analysing other cars positions.
+          bool car_ahead = false;
+          bool car_left = false;
+          bool car_righ = false;
 
           // find ref_v to use
           for (int i = 0; i < sensor_fusion.size(); i++) {
             // car is in our lane
             float d = sensor_fusion[i][6];
-            if (d < (2 + 4 * lane + 2) && d > (2 + 4 * lane - 2)) {
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double check_car_s = sensor_fusion[i][5];
-              double check_speed = sqrt(vx * vx + vy * vy);
+            int car_lane = -1;
+            // is it on the same lane we are
+            if (d > 0 && d < 4) {
+              car_lane = 0;
+            } else if (d > 4 && d < 8) {
+              car_lane = 1;
+            } else if (d > 8 && d < 12) {
+              car_lane = 2;
+            }
+            if (car_lane < 0) {
+              continue;
+            }
 
-              // if using previous points, predict the check car poison
-              check_car_s += ((double)prev_size * 0.02 * check_speed);
+            double vx = sensor_fusion[i][3];
+            double vy = sensor_fusion[i][4];
+            double check_car_s = sensor_fusion[i][5];
+            double check_speed = sqrt(vx * vx + vy * vy);
 
-              // check_s value greater than our,and s gap < 30
-              if ((check_car_s > car_s) && (check_car_s - car_s) < 30) {
-                // slow down and try to change lane
-                // ref_vel = 29.5;
-                too_close = true;
+            // if using previous points, predict the check car poison
+            check_car_s += ((double)prev_size * 0.02 * check_speed);
 
-                if (lane > 0) {
-                  lane = 0;
-                }
-              }
+            if (car_lane == lane) {
+              // Car in our lane.
+              car_ahead |= check_car_s > car_s && check_car_s - car_s < 30;
+            } else if (car_lane - lane == -1) {
+              // Car left
+              car_left |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+            } else if (car_lane - lane == 1) {
+              // Car right
+              car_righ |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
             }
           }
 
-          if (too_close) {
-            ref_vel -= 0.224;  // 5m/s
-          } else if (ref_vel < 49.5) {
-            ref_vel += 0.224;
+          // Behavior : Let's see what to do.
+          double speed_diff = 0;
+          const double MAX_SPEED = 49.5;
+          const double MAX_ACC = .224;
+          if (car_ahead) {  // Car ahead
+            if (!car_left && lane > 0) {
+              // if there is no car left and there is a left lane.
+              lane--;  // Change lane left.
+            } else if (!car_righ && lane != 2) {
+              // if there is no car right and there is a right lane.
+              lane++;  // Change lane right.
+            } else {
+              speed_diff -= MAX_ACC;
+            }
+          } else {
+            if (lane != 1) {  // if we are not on the center lane.
+              if ((lane == 0 && !car_righ) || (lane == 2 && !car_left)) {
+                lane = 1;  // Back to center.
+              }
+            }
+            if (ref_vel < MAX_SPEED) {
+              speed_diff += MAX_ACC;
+            }
           }
 
           vector<double> ptsx;
@@ -219,25 +255,32 @@ int main() {
 
           // Fill up the rest of the path
           for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
-              double N = (target_dist /
-                          (0.02 * ref_vel / 2.24));  // 2.24 -- mph to km/s
-              double x_point = x_add_on + (target_x) / N;
-              double y_point = s(x_point);
+            ref_vel += speed_diff;
+            if (ref_vel > MAX_SPEED) {
+              ref_vel = MAX_SPEED;
+            } else if (ref_vel < MAX_ACC) {
+              ref_vel = MAX_ACC;
+            }
 
-              x_add_on = x_point;
+            double N =
+                (target_dist / (0.02 * ref_vel / 2.24));  // 2.24 -- mph to km/s
+            double x_point = x_add_on + (target_x) / N;
+            double y_point = s(x_point);
 
-              double x_ref = x_point;
-              double y_ref = y_point;
+            x_add_on = x_point;
 
-              // rotate, change the local coord to global coordnate
-              x_point = (x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw));
-              y_point = (x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw));
+            double x_ref = x_point;
+            double y_ref = y_point;
 
-              x_point += ref_x;
-              y_point += ref_y;
+            // rotate, change the local coord to global coordnate
+            x_point = (x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw));
+            y_point = (x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw));
 
-              next_x_vals.push_back(x_point);
-              next_y_vals.push_back(y_point);
+            x_point += ref_x;
+            y_point += ref_y;
+
+            next_x_vals.push_back(x_point);
+            next_y_vals.push_back(y_point);
           }
 
           std::cout << "car_x " << car_x << " car_y " << car_y << " car_yaw "
