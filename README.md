@@ -1,8 +1,8 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
+
 ### Simulator.
-You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
+You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).
 
 To run the simulator on Mac/Linux, first make the binary file executable with the following command:
 ```shell
@@ -43,13 +43,13 @@ Here is the data provided from the Simulator to the C++ Program
 #### Previous path data given to the Planner
 
 //Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
-the path has processed since last time. 
+the path has processed since last time.
 
 ["previous_path_x"] The previous list of x points previously given to the simulator
 
 ["previous_path_y"] The previous list of y points previously given to the simulator
 
-#### Previous path's end s and d values 
+#### Previous path's end s and d values
 
 ["end_path_s"] The previous list's last point's frenet s value
 
@@ -57,7 +57,7 @@ the path has processed since last time.
 
 #### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
 
-["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
+["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates.
 
 ## Details
 
@@ -87,7 +87,7 @@ A really helpful resource for doing this project and creating smooth trajectorie
   * Run either `install-mac.sh` or `install-ubuntu.sh`.
   * If you install from source, checkout to commit `e94b6e1`, i.e.
     ```
-    git clone https://github.com/uWebSockets/uWebSockets 
+    git clone https://github.com/uWebSockets/uWebSockets
     cd uWebSockets
     git checkout e94b6e1
     ```
@@ -143,3 +143,48 @@ still be compilable with cmake and make./
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
 
+
+# Model Documentation
+
+## Compilation
+
+Code could compile without error with 'cmake'.
+![Make](doc/make.png)
+
+## Valid trajectories
+
+### The car is able to drive at least 4.32 miles without incident.
+![Result](doc/Result.png)
+
+## Reflection
+Based on the provided code from the project, the path planning algorithms in `main.cpp` consist of three parts: Prediction, Behavior and Trajectory.
+
+### Prediction [line 104 to line 150](./src/main.cpp#L104)
+This part get the information from telemetry and fusion data.
+This part output the environment on the road. Three flags will be set or clear according to the prediction results:
+*car_on_ahead*: Threr is a Car on our lane in front us ,and the distance is smaller than 30m
+*car_on_left*: Car is on the left lane, and is close to us (dist < 30m)
+*car_on_right*: Car is on the right lane, and is close to us (dist < 30m)
+
+
+### Behavior [line 152 to line 179](./src/main.cpp#L152)
+The logic of this part is as follow:
+
+- We try to keep in center lane, if center lane is empty.
+- If the car just ahead is too close, we try to change lane.
+  -  We want to the the left lane if there is no car on it.
+  -  If there is already a car on the left, we try to change to the right lane.
+  - If we cannot change lane, we keep on the current lane and slow down.
+
+The gap of the speed change is controlled by `speed_diff`, which maximal is `kMaxAcc=0.224`.  The makes that the acc and jerk is small than limits.
+
+### Trajectory [line 180 to line 300](./src/main.cpp#L180)
+This part generate the trajectory based on the velocity and target lane output from the behavior model.
+
+In order to make the trajectories smooth, we use previous points, if previous size is close to empty, we use the car current state instead. (line 187-212)
+
+After that we set the target points in Frenet by adding evenly 30m spaced points from the referenced start point.(Line 214-242)
+
+We push the previous points into the target vector(next_x_vals,next_y_vals).Then we calculate the space of the lines to get the desired velocity(Line 257-261).
+
+Finally we fill up the rest of the path and added these points to the target vector(Line 265-293).

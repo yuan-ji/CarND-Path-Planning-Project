@@ -102,24 +102,24 @@ int main() {
           }
 
           // Prediction : Analysing other cars positions.
-          bool car_ahead = false;
-          bool car_left = false;
-          bool car_righ = false;
+          bool car_on_ahead = false;
+          bool car_on_left = false;
+          bool car_on_right = false;
 
           // find ref_v to use
           for (int i = 0; i < sensor_fusion.size(); i++) {
             // car is in our lane
             float d = sensor_fusion[i][6];
             int car_lane = -1;
-            // is it on the same lane we are
+            // Check the car lane
             if (d > 0 && d < 4) {
               car_lane = 0;
             } else if (d > 4 && d < 8) {
               car_lane = 1;
             } else if (d > 8 && d < 12) {
               car_lane = 2;
-            }
-            if (car_lane < 0) {
+            } else {
+              // Might be the on comming car
               continue;
             }
 
@@ -132,39 +132,47 @@ int main() {
             check_car_s += ((double)prev_size * 0.02 * check_speed);
 
             if (car_lane == lane) {
-              // Car in our lane.
-              car_ahead |= check_car_s > car_s && check_car_s - car_s < 30;
+              // if the Car in our lane, and it is too close
+              if(check_car_s > car_s && (check_car_s - car_s < 30)){
+                car_on_ahead = true;
+              }
             } else if (car_lane - lane == -1) {
-              // Car left
-              car_left |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+              // Car on left is too close
+              if(car_s -20 < check_car_s && check_car_s < car_s + 30){
+                car_on_left = true;
+              }
             } else if (car_lane - lane == 1) {
-              // Car right
-              car_righ |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+              // Car on the right is too close
+              if (car_s - 20 < check_car_s && check_car_s < car_s + 30) {
+                car_on_right = true;
+              }
             }
           }
 
-          // Behavior : Let's see what to do.
+          // Behavior : try to keep in center lane, if the car
+          // just ahead is too close, try to change lane to the left
+          // first. If failed, try to change lane to the right
           double speed_diff = 0;
-          const double MAX_SPEED = 49.5;
-          const double MAX_ACC = .224;
-          if (car_ahead) {  // Car ahead
-            if (!car_left && lane > 0) {
-              // if there is no car left and there is a left lane.
-              lane--;  // Change lane left.
-            } else if (!car_righ && lane != 2) {
-              // if there is no car right and there is a right lane.
-              lane++;  // Change lane right.
+          const double kMaxSpeed = 49.5;
+          const double kMaxAcc = .224;
+          if (car_on_ahead) {  // Car ahead
+            if (car_on_left== false && lane > 0) {
+              // if no car on the left lane
+              lane--;  // Change lane to left.
+            } else if (car_on_right == false && lane != 2) {
+              // if on car on the right lane
+              lane++;  // Change lane to right.
             } else {
-              speed_diff -= MAX_ACC;
+              speed_diff = -kMaxAcc;
             }
           } else {
-            if (lane != 1) {  // if we are not on the center lane.
-              if ((lane == 0 && !car_righ) || (lane == 2 && !car_left)) {
-                lane = 1;  // Back to center.
-              }
+            // Change back to center lane if possible
+            if ((lane == 0 && car_on_right == false) ||
+                (lane == 2 && car_on_left == false)) {
+              lane = 1;
             }
-            if (ref_vel < MAX_SPEED) {
-              speed_diff += MAX_ACC;
+            if (ref_vel < kMaxSpeed) {
+              speed_diff = kMaxAcc;
             }
           }
 
@@ -175,7 +183,7 @@ int main() {
           double ref_y = car_y;
           double ref_yaw = deg2rad(car_yaw);
 
-          // if previous size is clost to empty, use the car state
+          // if previous size is close to empty, use the car state
           if (prev_size < 2) {
               // use to points to make the path tangent to the car
               double prev_car_x = car_x - cos(car_yaw);
@@ -256,10 +264,8 @@ int main() {
           // Fill up the rest of the path
           for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
             ref_vel += speed_diff;
-            if (ref_vel > MAX_SPEED) {
-              ref_vel = MAX_SPEED;
-            } else if (ref_vel < MAX_ACC) {
-              ref_vel = MAX_ACC;
+            if (ref_vel > kMaxSpeed) {
+              ref_vel = kMaxSpeed;
             }
 
             double N =
@@ -283,8 +289,8 @@ int main() {
             next_y_vals.push_back(y_point);
           }
 
-          std::cout << "car_x " << car_x << " car_y " << car_y << " car_yaw "
-                    << car_yaw << std::endl;
+          // std::cout << "car_x " << car_x << " car_y " << car_y << " car_yaw "
+          //           << car_yaw << std::endl;
 
           json msgJson;
           msgJson["next_x"] = next_x_vals;
